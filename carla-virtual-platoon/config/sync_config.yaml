@@ -1,8 +1,8 @@
 /**:  
   ros__parameters:
-    carla/sync : false
-    carla/sync_with_delay : true
-    period/velocity_planner : 30
-    delay/velocity_planner : 350
+    carla/sync : true
+    carla/sync_with_delay : false
+    period/velocity_planner : 40
+    delay/velocity_planner : 5
     period/path_planner : 30
-    delay/path_planner : 30
+    delay/path_planner : 10

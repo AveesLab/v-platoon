@@ -73,7 +73,7 @@ target_link_libraries(main
   ${libCarla_LIBS} 
   ${Boost_LIBRARIES} 
   ${TIFF_LIBRARIES} 
-  jpeg png
+  jpeg png rt
 )
 ##############################################################################################
 

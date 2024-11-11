@@ -14,11 +14,13 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(Boost REQUIRED)
+find_package(ros2_msg REQUIRED)
 
 
 set(ament_dependencies
   rclcpp
   std_msgs
+  ros2_msg
 )
 
 include(dependency.cmake)
@@ -26,6 +28,7 @@ include(dependency.cmake)
 add_executable(main
     src/main.cpp
     node/manager.cpp
+    node/rosmanager.cpp
 )
 
 ament_target_dependencies(main ${ament_dependencies})
@@ -43,6 +46,7 @@ target_link_directories(main PUBLIC
 target_link_libraries(main 
   ${libCarla_LIBS} 
   ${Boost_LIBRARIES} 
+  rt
 )
 
 install(TARGETS

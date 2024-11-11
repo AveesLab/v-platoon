@@ -12,24 +12,33 @@ static auto &RandomChoice(const RangeT &range, RNG &&generator) {
 SyncManager::SyncManager()
     : Node("sync_manager_node"), registration_(10,false), sync_throttle(10,false), sync_steer(10,false) {
 
+            rclcpp::QoS custom_qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default));
+            custom_qos.reliable();
             client = new cc::Client(host, port);
             world = new cc::World(client->GetWorld());
-
+            //timer_ = this->create_wall_timer(10ms, std::bind(&SyncManager::timerCallback, this));
             TruckSizeSubscriber_ = this->create_subscription<std_msgs::msg::Int32>("/numtruckss", 10, std::bind(&SyncManager::TruckSizeSubCallback, this, std::placeholders::_1));
             RegistrationSubscriber_ = this->create_subscription<std_msgs::msg::Int32>("/registration", 10, std::bind(&SyncManager::RegistrationSubCallback, this, std::placeholders::_1));
             SyncThrottleSubscriber_ = this->create_subscription<std_msgs::msg::Int32>("/sync_throttle", 10, std::bind(&SyncManager::SyncThrottleSubCallback, this, std::placeholders::_1));
             SyncSteerSubscriber_ = this->create_subscription<std_msgs::msg::Int32>("/sync_steer", 10, std::bind(&SyncManager::SyncSteerSubCallback, this, std::placeholders::_1));
+
             ShutdownPublisher_ = this->create_publisher<std_msgs::msg::String>("/shutdown_topic",10);
             isNodeRunning_ = true;
+            TarPub_ = this->create_publisher<ros2_msg::msg::Target>("/truck0/target",10);
+            GapPub_ = this->create_publisher<std_msgs::msg::Float32>("/truck0/timegap",10);
 
             settings = world->GetSettings();   
             settings.synchronous_mode = true; // sync_mode 
-            settings.fixed_delta_seconds = 0.01f; // FPS
+            settings.fixed_delta_seconds = 0.05f; // FPS
+            //settings.max_substep_delta_time  = 0.001f;
+            //settings.max_substeps = 100;
             world->ApplySettings(settings,time_);
-
-
+            world = new cc::World(client->ReloadWorld(false));
+            fd = shm_open(SHARED_MEMORY_NAME, O_RDWR, 0666);
+            shared_mem_ptr = (int *)mmap(0, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             manager_Thread = std::thread(&SyncManager::managerInThread, this);
                 std::cerr << "init finish" << std::endl;
+                
            }
 
 
@@ -63,13 +72,16 @@ SyncManager::~SyncManager(void)
     std::cerr << "pub shutdown" << std::endl;
 }           
 
-
 void SyncManager::TruckSizeSubCallback(const std_msgs::msg::Int32::SharedPtr msg) {
-    std::cerr << "TruckSizeSubCallback : "<< msg->data << std::endl;
     unique_lock<mutex> lock(mutex_);
     this->size = msg->data;
     truck_ids.resize(this->size);
     trailer_ids.resize(this->size);
+}
+
+void SyncManager::timerCallback() {
+                recordData();
+                sim_time += 0.03f;
 }
 
 double SyncManager::GetDistanceBetweenActors(ActorPtr current, ActorPtr target) {
@@ -112,9 +124,11 @@ void SyncManager::recordData() {
                 // Get velocity and acceleration
                 Vector3D velocity = vehicle->GetVelocity();
                 Vector3D acceleration = vehicle->GetAcceleration();
-
+                auto loc_ = vehicle->GetLocation();
+                //std::cerr << loc_.y << std::endl;
                 // Calculate the length of the velocity and acceleration vectors
                 double velocity_length = std::sqrt(std::pow(velocity.x,2)  + std::pow(velocity.y,2) + std::pow(velocity.z,2)); 
+                velocity_length = std::round(velocity_length * 100.0f) / 100.0f;
                 double acceleration_length = acceleration.x;
 
                 // Placeholder for distance and flags (to be replaced with actual values)
@@ -138,14 +152,22 @@ void SyncManager::recordData() {
                 std::ofstream write_file;
                 if (read_file.fail()) { 
                     write_file.open(file_path);
-                    write_file << "Time, ActorID, Velocity, Acceleration, Distance, cut_in_flag, sotif_flag" << std::endl;
+                    write_file << "Time, ActorID, Velocity, Acceleration, Distance, cut_in_flag, lateral,lateral_error,steer" << std::endl;
                 }
                 read_file.close();
 
                 // Format and write data
-                char buf[256] = {0x00,};
-                sprintf(buf, "%.2f, %u, %.3f, %.3f, %.3f, %.3f, %.3f", 
-                        sim_time, actor_id, velocity_length, acceleration_length, distance_, cut_in_flag, sotif_flag);
+                char buf[512] = {0x00,};
+                if(i==0) {
+                    sprintf(buf, "%.2f, %u, %.2f, %.2f, %.2f, %.2f, %.2f,%.2f,%.2f", sim_time, actor_id, velocity_length, acceleration_length, distance_, cut_in_flag, loc_.y,lv_error,lv_steer);
+                }
+                else if(i==1) {
+                    sprintf(buf, "%.2f, %u, %.2f, %.2f, %.2f, %.2f, %.2f,%.2f,%.2f", sim_time, actor_id, velocity_length, acceleration_length, distance_, cut_in_flag, loc_.y,fv1_error,fv1_steer);
+                }
+                else if(i==2) {
+                    sprintf(buf, "%.2f, %u, %.2f, %.2f, %.2f, %.2f, %.2f,%.2f,%.2f", sim_time, actor_id, velocity_length, acceleration_length, distance_, cut_in_flag, loc_.y,fv2_error,fv2_steer);
+                }
+
 
                 write_file.open(file_path, std::ios::out | std::ios::app);
                 write_file << buf << std::endl;
@@ -158,20 +180,17 @@ void SyncManager::recordData() {
 
 void SyncManager::RegistrationSubCallback(const std_msgs::msg::Int32::SharedPtr msg) {
     unique_lock<mutex> lock(mutex_);
-    std::cerr << "RegistrationSubCallback : "<< msg->data << std::endl;
     registration_[msg->data] = true;
 }
 
 
 void SyncManager::SyncThrottleSubCallback(const std_msgs::msg::Int32::SharedPtr msg) {
     unique_lock<mutex> lock(mutex_);
-    //std::cerr << "throttle " << std::endl;
     sync_throttle[msg->data] = true;
 }
 
 void SyncManager::SyncSteerSubCallback(const std_msgs::msg::Int32::SharedPtr msg) {
     unique_lock<mutex> lock(mutex_);
-    //std::cerr << "steer" << std::endl;
     sync_steer[msg->data] = true;
 }
 
@@ -185,6 +204,7 @@ bool SyncManager::check_register() {
     //std::cerr << "tick for register " << std::endl;
     if(cnt == 0) {
         world->Tick(time_);    
+        //FindAllTruck();
         cnt = 1;
         for(int i = 0; i<size; i++) {
             if(registration_[i] == true) registration_[i] = false;
@@ -193,8 +213,9 @@ bool SyncManager::check_register() {
     }
     else if(cnt == 1) {
         registered = true;
-        std::cerr << "All registered" << std::endl;
-        world->Tick(time_);  
+        //std::cerr << "All registered" << std::endl;
+        FindAllTruck(); 
+        world->Tick(time_); 
         return true;
     }
 }
@@ -260,30 +281,27 @@ bool SyncManager::sync_received() {
 void SyncManager::managerInThread()
 {
     while(isNodeRunning_) {
+        std::chrono::high_resolution_clock::time_point start_time;
         if(check_register()) {
+            
             if(sync_received() && first) {
-                std::cerr << "tick" << sim_time<<std::endl;
-                recordData();
-                if(sim_time - 100.0f > 0.0f) {
-                    isNodeRunning_ = false;
-                    settings.synchronous_mode = false;
-                    world->ApplySettings(settings,time_);
-                    sleep(2);
-                    std_msgs::msg::String msg;
-                    msg.data = "down";
-                    ShutdownPublisher_->publish(msg);
-                    rclcpp::shutdown();
-                }
+                
+                sim_time += 50.0f;
+                //recordData();
                 world->Tick(time_);
-                sim_time += 0.01f;
+
             }
+                           
             if(!first) {
                 FindAllTruck();
+                RCLCPP_INFO(this->get_logger(), "Start Truck Platooning Simulation");
                 first = true;
             }
+
+
+
+        
         }
-
-
 
     }
 }

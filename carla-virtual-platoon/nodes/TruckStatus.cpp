@@ -66,7 +66,7 @@ void TruckStatusPublisher::publishIMUData(const boost::shared_ptr<csd::IMUMeasur
     float compass_ = carla_imu_measurement->GetCompass() * (180.0 / M_PI);
     auto gyro_ = carla_imu_measurement->GetGyroscope();
     auto accel_ = Vehicle_->GetAcceleration();
-
+    TruckStatusPublisher_velocity_callback();
     ros2_msg::msg::IMU msg;
     msg.header.stamp = this->now();
     msg.compass = compass_;
@@ -78,7 +78,6 @@ void TruckStatusPublisher::publishIMUData(const boost::shared_ptr<csd::IMUMeasur
     msg.accel_z = accel_.z;
     IMUPublisher_->publish(msg);
     TruckStatusPublisher_accel_callback();
-    TruckStatusPublisher_velocity_callback();
     this->sim_time += 0.01f;
 }
 
@@ -111,8 +110,10 @@ void TruckStatusPublisher::TruckStatusPublisher_accel_callback() {
 void TruckStatusPublisher::TruckStatusPublisher_velocity_callback() {
     vel_ = Vehicle_->GetVelocity();
     auto message = std_msgs::msg::Float32();
-    float result_vel = std::sqrt(std::pow(vel_.x,2)  + std::pow(vel_.y,2) + std::pow(vel_.z,2)); // m/s
+    float result_vel = vel_.x; // m/s
+    //result_vel = std::round(result_vel * 100.0f) / 100.0f;
     message.data = result_vel;
+    std::cerr << message.data  << std::endl;
     velocity_ = result_vel;
     VelocityPublisher_->publish(message);
 }

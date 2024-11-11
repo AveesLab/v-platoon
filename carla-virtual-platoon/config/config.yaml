@@ -19,8 +19,8 @@
     camera1/yaw : -180.0
     camera1/roll : 0.0
     camera1/sensor_tick : "0.033333f"
-    camera1/image_size_x : "640"
-    camera1/image_size_y : "480"
+    camera1/image_size_x : "1920"
+    camera1/image_size_y : "1080"
     camera1/fov : "90.0f"
     camera1/topic_name : "camera1" #rear camera
 
@@ -105,7 +105,22 @@
     lidar0/points_per_second : "560000"
     lidar0/range : "100.0f"
     lidar0/topic_name : "lidar0" #front lidar
-
+/**:  
+  ros__parameters: 
+    lidar1/x : -13.0
+    lidar1/y : 0.0
+    lidar1/z : 1.5
+    lidar1/pitch : 0.0 
+    lidar1/yaw : 90.0
+    lidar1/roll : 0.0
+    lidar1/sensor_tick : "0.01f"
+    lidar1/rotation_frequency : "120.0f"
+    lidar1/horizontal_fov : "180.0f"
+    lidar1/upper_fov : "20.0f"
+    lidar1/lower_fov : "-10.0f"
+    lidar1/points_per_second : "560000"
+    lidar1/range : "100.0f"
+    lidar1/topic_name : "lidar0" #front lidar
 /**:  
   ros__parameters: 
     info_topic_name : "velocity"
@@ -115,6 +130,6 @@
 /**:  
   ros__parameters:
     add_sensor/spectator : true 
-    add_sensor/radar_number : 3 
+    add_sensor/radar_number : 1 
     add_sensor/camera_number : 1
-    add_sensor/lidar_number : 1
+    add_sensor/lidar_number : 2 

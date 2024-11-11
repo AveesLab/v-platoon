@@ -9,14 +9,9 @@ LidarPublisher::LidarPublisher(boost::shared_ptr<carla::client::Actor> actor)
     
     this->get_parameter_or("add_sensor/lidar_number", num_lidars_, 1);
     this->get_parameter_or("carla/sync", sync_ , false);
-    this->get_parameter_or("carla/sync_with_delay", sync_with_delay, false);
     
-    if(sync_with_delay) {
-        GetDelayParameter();
-    }
 
     velocity_lidar_queue.resize(num_lidars_);
-    //publishers_.resize(num_lidars_);
 
     for(int i=0; i<num_lidars_; ++i){
         std::string index = std::to_string(i);
@@ -35,7 +30,7 @@ LidarPublisher::LidarPublisher(boost::shared_ptr<carla::client::Actor> actor)
         this->get_parameter_or("lidar" + index + "/points_per_second",lidar_points_per_second,std::string("30000"));
         this->get_parameter_or("lidar" + index + "/range",lidar_range,std::string("30.0f"));
         this->get_parameter_or("lidar" + index + "/topic_name",lidar_topic_name,std::string("carla/lidar" + index));
-        if(sync_ || sync_with_delay) lidar_sensor_tick = "0.0f";
+        if(sync_) lidar_sensor_tick = "0.0f";
 
         auto publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(lidar_topic_name, custom_qos);
         publishers_.push_back(publisher);
@@ -64,44 +59,8 @@ LidarPublisher::LidarPublisher(boost::shared_ptr<carla::client::Actor> actor)
             std::unique_lock<std::mutex> lock(mutex_);
             auto lidar_data = boost::static_pointer_cast<carla::sensor::data::LidarMeasurement>(data);
             assert(lidar_data != nullptr);
+            publishLidarData(lidar_data, publishers_[i]);
 
-            static int prev_tick_cnt = 0;
-
-            if(sync_with_delay) {
-
-                if (!velocity_lidar_queue[i].empty()) {
-                    int time_diff = tick_cnt - velocity_lidar_queue[i].front().timestamp;
-                    if(time_diff <= 0) time_diff += lcm_period;
-
-                    if(time_diff == velocity_planner_delay) {
-                        auto lidar_data_ = velocity_lidar_queue[i].front().lidar;
-                        //std::cerr << i << "  pub radar"<< velocity_radar_queue[i].front().timestamp << " " << cnt << " " <<  std::endl;
-                        velocity_lidar_queue[i].pop();
-                        publishLidarData(lidar_data_, publishers_[i]);
-                    }
-                }
-
-
-                if(velocity_planner_period == 0 || tick_cnt % velocity_planner_period == 0) {
-                    //std::cerr << i <<"  save radar" << tick_cnt << std::endl;
-                    velocity_lidar_queue[i].push(TimedLidar(lidar_data, tick_cnt));
-                }
-
-                cnt++;
-                if(cnt == num_lidars_) {
-                    prev_tick_cnt = tick_cnt; // Save the current tick count before resetting
-                    tick_cnt += 10;
-
-                    if(tick_cnt >= lcm_period) {
-                        tick_cnt = 0;
-                    }
-
-                    cnt = 0;
-                }
-            }
-            else {
-              publishLidarData(lidar_data, publishers_[i]);
-            }
         });
       }
 }
@@ -184,7 +143,7 @@ void LidarPublisher::publishLidarData(const boost::shared_ptr<csd::LidarMeasurem
 
     point_cloud_msg.data.resize(point_cloud_msg.row_step);
     memcpy(&point_cloud_msg.data[0], lidar_data.data(), lidar_data.size() * sizeof(float));
-
+    //RCLCPP_INFO(this->get_logger(), "lidar pub");
     publisher->publish(point_cloud_msg);
  
     }

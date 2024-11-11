@@ -13,8 +13,8 @@ Spectator::Spectator(boost::shared_ptr<carla::client::Actor> actor)
     if(spectator_ == true){
       this->get_parameter_or("rgbcam/sx",rgbcam_x,-5.0f);
       this->get_parameter_or("rgbcam/sy",rgbcam_y,30.0f);
-      this->get_parameter_or("rgbcam/sz",rgbcam_z,55.0f);
-      this->get_parameter_or("rgbcam/spitch",rgbcam_pitch, -45.0f);
+      this->get_parameter_or("rgbcam/sz",rgbcam_z,45.0f);
+      this->get_parameter_or("rgbcam/spitch",rgbcam_pitch, -55.0f);
       this->get_parameter_or("rgbcam/syaw",rgbcam_yaw,-90.0f);
       this->get_parameter_or("rgbcam/sroll",rgbcam_roll,0.0f);
       this->get_parameter_or("rgbcam/ssensor_tick",rgbcam_sensor_tick,std::string("0.033f"));
@@ -27,8 +27,8 @@ Spectator::Spectator(boost::shared_ptr<carla::client::Actor> actor)
       camera_bp = boost::shared_ptr<carla::client::ActorBlueprint>(const_cast<carla::client::ActorBlueprint*>(blueprint_library->Find("sensor.camera.rgb")));
       assert(camera_bp != nullptr);
       camera_bp->SetAttribute("sensor_tick", "0.0f");
-      camera_bp->SetAttribute("image_size_x","1280");
-      camera_bp->SetAttribute("image_size_y","600");
+      camera_bp->SetAttribute("image_size_x","1920 ");
+      camera_bp->SetAttribute("image_size_y","1080");
       camera_bp->SetAttribute("fov", "90.0");
       //camera_bp->SetAttribute("enable_postprocess_effects","false");
   

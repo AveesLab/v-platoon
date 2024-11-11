@@ -13,10 +13,6 @@ RadarPublisher::RadarPublisher(boost::shared_ptr<carla::client::Actor> actor)
     this->get_parameter_or("add_sensor/radar_number", num_radars_, 3);
     this->get_parameter_or("carla/sync", sync_ , false);
     this->get_parameter_or("carla/sync_with_delay", sync_with_delay, false);
-    std::cerr << sync_with_delay << std::endl;
-    if(sync_with_delay) {
-        GetDelayParameter();
-    }
 
     velocity_radar_queue.resize(num_radars_);
     //publishers_.resize(num_radars_);
@@ -36,7 +32,7 @@ RadarPublisher::RadarPublisher(boost::shared_ptr<carla::client::Actor> actor)
         this->get_parameter_or("radar" + index + "/points_per_second", radar_points_per_second, std::string("8000"));
         this->get_parameter_or("radar" + index + "/range", radar_range, std::string("300.0"));
         this->get_parameter_or("radar" + index + "/topic_name", radar_topic_name, std::string("carla/radar" + index));
-        if(sync_ || sync_with_delay) radar_sensor_tick = "0.0f";
+        if(sync_) radar_sensor_tick = "0.0f";
 
         auto publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(radar_topic_name, custom_qos);
         publishers_.push_back(publisher);
@@ -63,74 +59,10 @@ RadarPublisher::RadarPublisher(boost::shared_ptr<carla::client::Actor> actor)
             std::unique_lock<std::mutex> lock(mutex_);
             auto radar_data = boost::static_pointer_cast<carla::sensor::data::RadarMeasurement>(data);
             assert(radar_data != nullptr);
-            
-            static int prev_tick_cnt = 0;
-            //if(cnt == 0) std::cerr << "--------------" <<tick_cnt << "------------" << prev_tick_cnt << "------------" << std::endl;
-            if(sync_with_delay) {
-
-                if (!velocity_radar_queue[i].empty()) {
-                    int time_diff = tick_cnt - velocity_radar_queue[i].front().timestamp;
-                    if(time_diff <= 0) time_diff += lcm_period;
-
-                    if(time_diff == velocity_planner_delay) {
-                        auto radar_data_ = velocity_radar_queue[i].front().radar;
-                        //std::cerr << i << "  pub radar"<< velocity_radar_queue[i].front().timestamp << " " << cnt << " " <<  std::endl;
-                        velocity_radar_queue[i].pop();
-                        publishRadarData(radar_data_, publishers_[i]);
-                    }
-                    //else std::cerr << i << " no " << time_diff << " " << velocity_radar_queue[i].front().timestamp<< std::endl;
-                }
-                //else std::cerr << i << " eopmty" << std::endl;
-                
-
-                if(velocity_planner_period == 0 || tick_cnt % velocity_planner_period == 0) {
-                    //std::cerr << i <<"  save radar" << tick_cnt << std::endl;
-                    velocity_radar_queue[i].push(TimedRadar(radar_data, tick_cnt));
-                }
-
-                cnt++;
-                if(cnt == num_radars_) {
-                    prev_tick_cnt = tick_cnt; // Save the current tick count before resetting
-                    tick_cnt += 10;
-
-                    if(tick_cnt >= lcm_period) {
-                        tick_cnt = 0;
-                    }
-
-                    cnt = 0;
-                }
-            }
-            else {
-              publishRadarData(radar_data, publishers_[i]);
-            }
-
+            publishRadarData(radar_data, publishers_[i]);
         });
    }
 
-}
-
-
-void RadarPublisher::GetDelayParameter() {
-    this->get_parameter_or("period/velocity_planner", velocity_planner_period, 30);
-    this->get_parameter_or("delay/velocity_planner", velocity_planner_delay , 100);
-
-    int lcm_all = lcm(velocity_planner_period, velocity_planner_delay);
-
-    lcm_period = lcm_all; 
-}
-
-
-int RadarPublisher::gcd(int a, int b) {
-    while (b != 0) {
-        int temp = b;
-        b = a % b;
-        a = temp;
-    }
-    return a;
-}
-
-int RadarPublisher::lcm(int a, int b) {
-    return (a * b) / gcd(a, b);
 }
 
 void RadarPublisher::publishRadarData(const boost::shared_ptr<csd::RadarMeasurement> &carla_radar_measurement, rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher) {
@@ -197,10 +129,11 @@ void RadarPublisher::publishRadarData(const boost::shared_ptr<csd::RadarMeasurem
       float z = detection.depth * std::sin(detection.altitude);
 
       float range = detection.depth;
+      range = std::round(range * 100.0f) / 100.0f;
       float velocity = detection.velocity;
       float azimuth_angle = detection.azimuth;
       float elevation_angle = detection.altitude;
-      //RCLCPP_INFO(this->get_logger(), "Radar vale: %f %f %f %f %f", x,y,z,range,velocity);
+      
       memcpy(&data[offset + fields[0].offset], &x, sizeof(float));
       memcpy(&data[offset + fields[1].offset], &y, sizeof(float));
       memcpy(&data[offset + fields[2].offset], &z, sizeof(float));

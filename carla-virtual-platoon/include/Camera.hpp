@@ -2,8 +2,13 @@
 #include <boost/make_shared.hpp>
 #include <rclcpp/qos.hpp>
 #include <std_msgs/msg/bool.hpp>
-
+#include <std_msgs/msg/string.hpp>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <boost/shared_ptr.hpp>
+
+#define SHARED_MEMORY_SIZE (640 * 480 * 4)
 
 struct TimedImage {
     boost::shared_ptr<csd::Image> image;
@@ -15,7 +20,7 @@ struct TimedImage {
 class CameraPublisher : public rclcpp::Node {
 
 public:
-    CameraPublisher(boost::shared_ptr<carla::client::Actor> actor);
+    CameraPublisher(boost::shared_ptr<carla::client::Actor> actor,int trucknum_);
     ~CameraPublisher() {
         for(auto cam : camera_actors) {
             cam->Destroy();
@@ -28,11 +33,14 @@ private:
 //    void publishImage(const csd::Image &carla_image);
     void publishImage(const csd::Image &carla_image, rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher);
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr LaneImagePublisher;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr LaneImagePublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr CurImagePublisher_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr WaitLanePublisher;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr WaitVelPublisher;
     std::vector<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr> publishers_;
+    std::vector<rclcpp::Publisher<std_msgs::msg::String>::SharedPtr> shm_publishers_;
+    std::vector<rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr> sync_publishers_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr image_sync_sub_;
     std::vector<boost::shared_ptr<cc::Sensor>> camera_sensors; 
     std::vector<boost::shared_ptr<cc::Actor>> camera_actors; 
 
@@ -73,4 +81,12 @@ private:
     std::string rgbcam_image_size_x;
     std::string rgbcam_image_size_y;
     std::string rgbcam_fov;
+
+    //shmem
+    void *initialize_shared_memory(const std::string &name);
+    std::vector<void *> shared_memory_ptrs_;  // shmem pointers
+    void publishImage(const csd::Image &carla_image, rclcpp::Publisher<std_msgs::msg::String>::SharedPtr publisher, void *shared_memory, std::string name);
+    std::vector<std::string> shm_name;
+    void SyncSubCallback(const std_msgs::msg::Bool::SharedPtr msg);
+    bool shm_com = false;
 };

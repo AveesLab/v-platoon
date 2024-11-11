@@ -26,6 +26,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <carla/geom/Vector3D.h>
 #include <std_msgs/msg/float32.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <carla/client/Vehicle.h>
 #include <carla/rpc/VehicleControl.h>
 #include <carla/sensor/data/LidarMeasurement.h>

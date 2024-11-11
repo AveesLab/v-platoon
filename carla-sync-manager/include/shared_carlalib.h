@@ -25,6 +25,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <carla/rpc/VehicleControl.h>
 #include <carla/rpc/EpisodeSettings.h>
+#include <carla/client/WorldSnapshot.h>
 
 namespace cc = carla::client;
 using ActorId = carla::ActorId;
