@@ -1,4 +1,5 @@
 # Carla for Truck Platooning
+![image](https://github.com/user-attachments/assets/660c8a2d-9d09-4205-a218-db2de69b4cb5)
 
 
 # System Requirements
